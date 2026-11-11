@@ -166,6 +166,13 @@ impl<SE: crate::extensions::ShellExtensions> crate::Shell<SE> {
         source_info: &crate::SourceInfo,
         params: &ExecutionParameters,
     ) -> Result<ExecutionResult, error::Error> {
+        let mut command = command.into();
+        // Aliases are expanded in the text, before it is parsed, as bash does.
+        if self.options.expand_aliases {
+            if let Some(expanded) = crate::aliases::expand(&command, self.aliases()) {
+                command = expanded;
+            }
+        }
         let parse_result = self.parse_string(command);
         self.run_parsed_result(parse_result, source_info, params)
             .await

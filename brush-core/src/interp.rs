@@ -210,10 +210,18 @@ impl Execute for ast::Program {
         let mut result = ExecutionResult::success();
 
         for command in &self.complete_commands {
+            // An alias defined by an earlier command here (a sourced file, a `-c`
+            // string) counts from the next one, as bash reads one command at a time.
+            let expanded = crate::aliases::expand_command(shell, command);
+            let run = match &expanded {
+                Some(program) => program.execute(shell, params).await,
+                None => command.execute(shell, params).await,
+            };
+
             // Execute the command and handle any errors without immediately propagating them.
             // This allows interactive shells to continue executing subsequent commands even after
             // errors.
-            match command.execute(shell, params).await {
+            match run {
                 Ok(exec_result) => result = exec_result,
                 Err(err) => {
                     // Display the error and convert to an execution result.
@@ -1229,29 +1237,14 @@ impl<SE: extensions::ShellExtensions> ExecuteInPipeline<SE> for ast::SimpleComma
                     }
                 }
                 CommandPrefixOrSuffixItem::Word(arg) => {
-                    let mut next_args =
+                    let next_args =
                         expansion::full_expand_and_split_word(&mut context.shell, &params, arg)
                             .await?;
 
                     if args.is_empty() {
-                        if let Some(cmd_name) = next_args.first() {
-                            if let Some(alias_value) =
-                                context.shell.aliases().get(cmd_name.as_str())
-                            {
-                                //
-                                // TODO(#57): This is a total hack; aliases are supposed to be
-                                // handled much earlier in the process.
-                                //
-                                let mut alias_pieces: Vec<_> = alias_value
-                                    .split_ascii_whitespace()
-                                    .map(|i| i.to_owned())
-                                    .collect();
-
-                                next_args.remove(0);
-                                alias_pieces.append(&mut next_args);
-
-                                next_args = alias_pieces;
-                            }
+                        if !next_args.is_empty() {
+                            // Aliases were expanded in the command's text before it was
+                            // parsed (`aliases.rs`), as bash does; not here, at run time.
 
                             let first_arg = next_args[0].as_str();
 

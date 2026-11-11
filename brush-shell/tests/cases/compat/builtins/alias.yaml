@@ -8,7 +8,6 @@ cases:
       myalias 'hello'
 
   - name: "Alias with trailing space"
-    known_failure: true # Issue #57
     stdin: |
       shopt -s expand_aliases
       alias cmd='echo '
@@ -18,7 +17,6 @@ cases:
       cmd other otherother
 
   - name: "Alias referencing to alias"
-    known_failure: true # Issue #57
     stdin: |
       shopt -s expand_aliases
       alias myalias=echo
@@ -26,8 +24,29 @@ cases:
       outeralias 'hello'
 
   - name: "Alias to keywords"
-    known_failure: true # Issue #286
     stdin: |
       shopt -s expand_aliases
       alias myalias=if
       myalias true; then echo "true"; fi
+
+  - name: "Alias with redirection and pipe"
+    stdin: |
+      shopt -s expand_aliases
+      alias e1='echo hi 2>&1'
+      alias pp='echo a | tr a b'
+      e1 there
+      pp
+      e1 2>/dev/null x
+
+  - name: "Alias with quotes and a list"
+    stdin: |
+      shopt -s expand_aliases
+      alias q='echo "two  spaces"; echo next'
+      q
+      echo q
+
+  - name: "Alias defined on the line it is used on"
+    stdin: |
+      shopt -s expand_aliases
+      alias x1='echo X1'; x1 2>/dev/null || echo not-yet
+      x1
